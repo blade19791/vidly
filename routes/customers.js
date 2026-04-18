@@ -1,6 +1,8 @@
 import express from "express";
 import pool from "../data/db.js";
-import { validateCustomer } from "../middleware/validateCustomer.js";
+import validate from "../middleware/validate.js";
+import { customerSchema } from "../validators/customer.validator.js";
+import { idSchema } from "../validators/id.validator.js";
 
 const router = express.Router();
 
@@ -14,11 +16,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", validate(idSchema, "params"), async (req, res) => {
   const customerId = req.params.id;
-  if (!customerId || isNaN(parseInt(customerId))) {
-    return res.status(400).send("Invalid genre ID format.");
-  }
 
   try {
     const result = await pool.query("SELECT * FROM customers WHERE id = $1", [
@@ -35,7 +34,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", validateCustomer, async (req, res) => {
+router.post("/", validate(customerSchema), async (req, res) => {
   const { isGold, name, phone } = req.body;
 
   try {
@@ -51,7 +50,7 @@ router.post("/", validateCustomer, async (req, res) => {
   }
 });
 
-router.put("/:id", validateCustomer, async (req, res) => {
+router.put("/:id", validate(customerSchema), async (req, res) => {
   const { isGold, name, phone } = req.body;
   const customerId = req.params.id;
 
@@ -74,11 +73,8 @@ router.put("/:id", validateCustomer, async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", validate(idSchema, "params"), async (req, res) => {
   const customerId = req.params.id;
-  if (!customerId || isNaN(parseInt(customerId))) {
-    return res.status(400).send("Invalid customerId ID format.");
-  }
 
   try {
     const result = await pool.query(
@@ -91,8 +87,7 @@ router.delete("/:id", async (req, res) => {
         .status(404)
         .send(`Customer with ID ${customerId} was not found.`);
     }
-
-    res.json(result.rows[0]);
+    res.json({ message: "Customer deleted", customer: result.rows[0] });
   } catch (err) {
     console.error(err.message);
     res.status(500).send("Server side error");

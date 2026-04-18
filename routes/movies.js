@@ -1,22 +1,11 @@
-import express from "express";
 import pool from "../data/db.js";
-import Joi from "joi";
+import validate from "../middleware/validate.js";
+import { idSchema } from "../validators/id.validator.js";
+import { movieSchema } from "../validators/movie.validator.js";
+import express from "express";
 
 const router = express.Router();
 
-// ==============================
-// Validation Schema
-// ==============================
-const movieSchema = Joi.object({
-  title: Joi.string().min(2).max(255).required(),
-  genreId: Joi.number().integer().min(1).max(5).required(),
-  numberInStock: Joi.number().integer().min(0).required(),
-  dailyRentalRate: Joi.number().min(0).required(),
-});
-
-// ==============================
-// GET ALL MOVIES
-// ==============================
 router.get("/", async (req, res) => {
   try {
     const result =
@@ -32,17 +21,20 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ==============================
-// GET SINGLE MOVIE
-// ==============================
-router.get("/:id", async (req, res) => {
+router.get("/:id", validate(idSchema, "params"), async (req, res) => {
+  const moviesId = req.params.id;
+
   try {
-    const result = await pool.query("SELECT * FROM movies WHERE id = $1", [
-      req.params.id,
-    ]);
+    const result = await pool.query(
+      `SELECT m.title, g.name, m.numberinstock, m.dailyrentalrate
+       FROM movies m
+       JOIN genres g ON m.genreid = g.id
+       WHERE m.id = $1`,
+      [moviesId],
+    );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Movie not found" });
+      return res.status(404).send(`Movie not found`);
     }
 
     res.json(result.rows[0]);
@@ -52,17 +44,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ==============================
-// CREATE MOVIE
-// ==============================
-router.post("/", async (req, res) => {
-  // Validation
-  const { error } = movieSchema.validate(req.body);
-
-  if (error) {
-    return res.status(400).json({ error: error.details[0].message });
-  }
-
+router.post("/", validate(movieSchema), async (req, res) => {
   const { title, genreId, numberInStock, dailyRentalRate } = req.body;
 
   try {
@@ -76,64 +58,48 @@ router.post("/", async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err.message);
-
-    // Foreign key error (invalid genreId)
-    if (err.code === "23503") {
-      return res.status(400).json({ error: "Invalid genreId" });
-    }
-
-    res.status(500).send("Server side error");
+    res.status(500).send("Server error");
   }
 });
 
-// ==============================
-// UPDATE MOVIE
-// ==============================
-router.put("/:id", async (req, res) => {
-  // Validation
-  const { error } = movieSchema.validate(req.body);
-  if (error) {
-    return res.status(400).json({ error: error.details[0].message });
-  }
+router.put(
+  "/:id",
+  validate(idSchema, "params"),
+  validate(movieSchema),
+  async (req, res) => {
+    const { id } = req.params;
+    const { title, genreId, numberInStock, dailyRentalRate } = req.body;
 
-  const { title, genreId, numberInStock, dailyRentalRate } = req.body;
+    try {
+      const result = await pool.query(
+        `UPDATE movies
+         SET title = $1,
+             "genreid" = $2,
+             "numberinstock" = $3,
+             "dailyrentalrate" = $4
+         WHERE id = $5
+         RETURNING *`,
+        [title, genreId, numberInStock, dailyRentalRate, id],
+      );
 
-  try {
-    const result = await pool.query(
-      `UPDATE movies
-       SET title = $1,
-           "genreid" = $2,
-           "numberinstock" = $3,
-           "dailyrentalrate" = $4
-       WHERE id = $5
-       RETURNING *`,
-      [title, genreId, numberInStock, dailyRentalRate, req.params.id],
-    );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "Movie not found" });
+      }
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Movie not found" });
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send("Server error");
     }
+  },
+);
 
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-
-    if (err.code === "23503") {
-      return res.status(400).json({ error: "Invalid genreId" });
-    }
-
-    res.status(500).send("Server side error");
-  }
-});
-
-// ==============================
-// DELETE MOVIE
-// ==============================
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", validate(idSchema, "params"), async (req, res) => {
+  const movieId = req.params.id;
   try {
     const result = await pool.query(
       "DELETE FROM movies WHERE id = $1 RETURNING *",
-      [req.params.id],
+      [movieId],
     );
 
     if (result.rows.length === 0) {

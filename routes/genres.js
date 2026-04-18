@@ -1,6 +1,9 @@
 import express from "express";
 const router = express.Router();
 import pool from "../data/db.js";
+import { genreSchema } from "../validators/genre.validator.js";
+import { idSchema } from "../validators/id.validator.js";
+import validate from "../middleware/validate.js";
 
 router.get("/", async (req, res) => {
   try {
@@ -12,11 +15,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", validate(idSchema, "params"), async (req, res) => {
   const genreId = req.params.id;
-  if (!genreId || isNaN(parseInt(genreId))) {
-    return res.status(400).send("Invalid genre ID format.");
-  }
 
   try {
     const result = await pool.query("SELECT * FROM genres WHERE id = $1", [
@@ -29,12 +29,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", validate(genreSchema), async (req, res) => {
   const name = req.body.name;
-  if (!name || name.length <= 3)
-    return res
-      .status(400)
-      .send("name is required and the name length should be greater than 3");
 
   try {
     const result = await pool.query(
@@ -48,7 +44,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", validate(idSchema, "params"), async (req, res) => {
   const genreId = req.params.id;
   if (!genreId || isNaN(parseInt(genreId))) {
     return res.status(400).send("Invalid genre ID format.");
@@ -80,7 +76,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", validate(idSchema, "params"), async (req, res) => {
   const genreId = req.params.id;
   if (!genreId || isNaN(parseInt(genreId))) {
     return res.status(400).send("Invalid genre ID format.");
